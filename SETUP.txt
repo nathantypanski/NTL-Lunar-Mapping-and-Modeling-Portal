@@ -1,0 +1,47 @@
+---------------
+Build Setup
+---------------
+
+1) Modify build.properties. Ensure that pds.home points to the directory in which the PDS
+   project is deployed. The Maven project expects ${pds.dir}/import_and_persistence to exist and to
+   contains the NASA PDS/LMMP API Update.
+
+-------------
+DB Setup
+-------------
+
+1) Create a database in the target MySQL database and run the following create
+   statement:
+   
+CREATE TABLE Job (uuid char(36) primary key, status varchar(20), hadoop_job_id varchar(100), fail_reason varchar(200), output_format varchar(10));
+
+---------------------
+Hadoop Env Setup
+---------------------
+
+These changes may be made in ~hadoop/.bash_profile -- REMEMBER TO source the
+.bash_profile file!   
+
+1) Ensure that HADOOP_HOME is set in the environment.
+
+   This should be the same as YARN_HOME in the provided Topcoder VM. 
+   
+2) Ensure that HADOOP_CONF_DIR is set in the environment.
+
+   In the Topcoder VM this should be set to ${HADOOP_HOME}/etc/hadoop, but it
+   may (will) vary depending on your local setup, if not running in the VM.
+
+-------------------------------
+Java properties file setup
+-------------------------------
+
+0) File is at src/main/resources/lmmp.properties
+
+1) If necessary modify the s3.* properties (they have been defaulted to the
+   values provided in the TC forum thread
+   http://apps.topcoder.com/forums/?module=Thread&threadID=824230&start=0)
+   
+2) Set the jdbc.* properties: these establish the connection to the MySQL
+   database.
+   
+3) The hadoop property is set to run the script above.

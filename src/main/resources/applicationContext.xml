@@ -1,0 +1,121 @@
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context" xmlns:tx="http://www.springframework.org/schema/tx"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+	http://www.springframework.org/schema/beans/spring-beans-3.0.xsd 
+	http://www.springframework.org/schema/context
+	http://www.springframework.org/schema/context/spring-context-3.0.xsd
+		http://www.springframework.org/schema/tx
+	http://www.springframework.org/schema/tx/spring-tx-3.0.xsd">
+
+	<context:component-scan base-package="com.topcoder.nasa" />
+
+	<tx:annotation-driven />
+
+	<!-- properties -->
+	<bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+		<property name="location" value="classpath:/lmmp.properties" />
+	</bean>
+
+	<!-- S3 -->
+	<bean id="s3Base" abstract="true">
+		<property name="bucketName" value="${s3.bucket-name}" />
+		<property name="identity" value="${s3.key}" />
+		<property name="credential" value="${s3.secret}" />
+	</bean>
+
+	<bean id="fileUploader" class="com.topcoder.nasa.file.S3FileUploader" parent="s3Base" />
+
+	<bean id="s3FileUrlCreator" class="com.topcoder.nasa.file.S3FileUrlCreator" parent="s3Base" />
+
+	<!-- hadoop -->
+
+	<bean id="hadoopConfiguration" class="org.apache.hadoop.conf.Configuration" />
+
+	<bean id="jobClient" class="org.apache.hadoop.mapred.JobClient">
+		<constructor-arg ref="hadoopConfiguration" />
+	</bean>
+
+	<bean id="hdfsFileSystem" factory-method="get" class="org.apache.hadoop.fs.FileSystem">
+		<constructor-arg ref="hadoopConfiguration" />
+	</bean>
+
+	<!-- FileSystem fileSystem = FileSystem.get(new Configuration()); -->
+
+	<!-- LMMP DB -->
+
+	<bean id="lmmpDataSource" class="org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy">
+		<constructor-arg>
+			<bean class="org.springframework.jdbc.datasource.SimpleDriverDataSource">
+				<property name="driverClass" value="${jdbc.lmmp.driver-class}" />
+				<property name="url" value="${jdbc.lmmp.url}" />
+				<property name="username" value="${jdbc.lmmp.username}" />
+				<property name="password" value="${jdbc.lmmp.password}" />
+			</bean>
+		</constructor-arg>
+	</bean>
+
+	<bean id="lmmpJdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="lmmpDataSource" />
+	</bean>
+
+	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="lmmpDataSource" />
+	</bean>
+
+	<!-- job monitor -->
+
+	<bean id="scheduledTask" class="org.springframework.scheduling.concurrent.ScheduledExecutorTask">
+		<!-- wait 10 seconds before starting repeated execution -->
+		<property name="delay" value="10000" />
+		<!-- run every 10 seconds -->
+		<property name="period" value="10000" />
+		<property name="runnable" ref="jobMonitorTask" />
+	</bean>
+
+	<bean id="jobMonitorTask" class="org.springframework.scheduling.support.MethodInvokingRunnable">
+		<property name="targetObject" ref="hadoopRunningJobMonitor" />
+		<property name="targetMethod" value="monitor" />
+	</bean>
+
+	<bean id="timerFactory" class="org.springframework.scheduling.concurrent.ScheduledExecutorFactoryBean">
+		<property name="scheduledExecutorTasks">
+			<list>
+				<ref bean="scheduledTask" />
+			</list>
+		</property>
+	</bean>
+
+	<bean id="fileSystemImagePreparer" class="com.topcoder.nasa.image.FileSystemImagePreparer">
+		<property name="partFile" value="${hadoop.job.part-file}" />
+	   	<property name="picDirectory" value="${hadoop.job.pic-job-directory}" />
+	</bean>
+
+	<bean id="logger" class="com.topcoder.util.log.log4j.Log4jLog">
+		<constructor-arg index="0" value="gov.nasa.pds" />
+		<constructor-arg index="1" value="false" />
+	</bean>
+
+	<bean id="pdsDataSource" class="org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy">
+		<constructor-arg>
+			<bean class="org.springframework.jdbc.datasource.SimpleDriverDataSource">
+				<property name="driverClass" value="${jdbc.pds.driver-class}" />
+				<property name="url" value="${jdbc.pds.url}" />
+				<property name="username" value="${jdbc.pds.username}" />
+				<property name="password" value="${jdbc.pds.password}" />
+			</bean>
+		</constructor-arg>
+	</bean>
+
+	<bean id="pdsJdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="pdsDataSource" />
+	</bean>
+
+	<bean id="dataSetService" class="gov.nasa.pds.services.impl.JDBCDataSetService">
+		<property name="logger" ref="logger" />
+		<property name="jdbcTemplate" ref="pdsJdbcTemplate" />
+	</bean>
+	
+	<bean class="com.topcoder.nasa.job.http.ImageHttpDownloader">
+	   	<property name="downloadDirectory" value="${hadoop.job.pic-job-directory}" />
+	</bean>
+</beans>
